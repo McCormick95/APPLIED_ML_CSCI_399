@@ -1,0 +1,3 @@
+[submodule "CloverLeaf_Serial"]
+	path = CloverLeaf_Serial
+	url = https://github.com/McCormick95/CloverLeaf_Serial.git
