@@ -10,3 +10,17 @@ data_processing/visualizations/final_state_analysis.png
 data_processing/data_103124_03.tar.gz
 data_processing/data_11124_01.tar.gz
 data_processing/visualizations/state_evolution.mp4
+*.vtk
+*.tar.gz
+data_processing/new_data/*
+CloverLeaf_Serial/*.vtk
+data_processing/new_data/*
+CloverLeaf_Serial/*.vtk
+data_processing/new_data/*
+CloverLeaf_Serial/*.vtk
+data_processing/new_data/*
+CloverLeaf_Serial/*.vtk
+data_processing/new_data/*
+CloverLeaf_Serial/*.vtk
+data_processing/new_data/*
+CloverLeaf_Serial/*.vtk
