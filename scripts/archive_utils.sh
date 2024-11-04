@@ -21,25 +21,25 @@ create_archive_and_cleanup() {
     cd "$output_dir"
     tar -czf "$archive_name" iteration_${iteration}
     
-    # Add archive pattern to .gitignore if not already present
-    local gitignore_file="${base_dir}/.gitignore"
-    local patterns=(
-        "*.vtk"
-        "*.tar.gz"
-        "data_processing/new_data/*"
-        "CloverLeaf_Serial/*.vtk"
-    )
+    # # Add archive pattern to .gitignore if not already present
+    # local gitignore_file="${base_dir}/.gitignore"
+    # local patterns=(
+    #     "*.vtk"
+    #     "*.tar.gz"
+    #     "data_processing/new_data/*"
+    #     "CloverLeaf_Serial/*.vtk"
+    # )
     
-    # Create .gitignore if it doesn't exist
-    touch "$gitignore_file"
+    # # Create .gitignore if it doesn't exist
+    # touch "$gitignore_file"
     
-    # Add patterns to .gitignore if they don't exist
-    for pattern in "${patterns[@]}"; do
-        if ! grep -q "^${pattern}$" "$gitignore_file"; then
-            echo "$pattern" >> "$gitignore_file"
-            echo "Added ${pattern} to .gitignore"
-        fi
-    done
+    # # Add patterns to .gitignore if they don't exist
+    # for pattern in "${patterns[@]}"; do
+    #     if ! grep -q "^${pattern}$" "$gitignore_file"; then
+    #         echo "$pattern" >> "$gitignore_file"
+    #         echo "Added ${pattern} to .gitignore"
+    #     fi
+    # done
     
     # Remove VTK files from CloverLeaf_Serial directory
     rm -f "${base_dir}/CloverLeaf_Serial/"*.vtk

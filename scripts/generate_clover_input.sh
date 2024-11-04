@@ -1,6 +1,6 @@
 #!/bin/bash
 
-OUTPUT_STEP_VALUE=5 # Adjust this to control how often VTK files are written
+OUTPUT_STEP_VALUE=2 # Adjust this to control how often VTK files are written
 
 # Function to generate random number between min and max
 generate_random() {
@@ -23,20 +23,22 @@ generate_clover_input() {
     local xmax=$(generate_random 4.0 6.0)
     local ymax=$(generate_random 1.5 2.5)
     
+
+    # state 2 density=${density2} energy=${energy2} geometry=rectangle xmin=0.0 xmax=${xmax} ymin=0.0 ymax=${ymax}
     # Create new clover.in file with random values
     cat > "$output_file" << EOF
 *clover
 
  state 1 density=${density1} energy=${energy1}
- state 2 density=${density2} energy=${energy2} geometry=rectangle xmin=0.0 xmax=${xmax} ymin=0.0 ymax=${ymax}
+ state 2 density=${density2} energy=${energy2} geometry=rectangle xmin=0.0 xmax=1.0 ymin=0.0 ymax=1.0
 
  x_cells=${num_cells}
  y_cells=${num_cells}
 
  xmin=0.0
  ymin=0.0
- xmax=10.0
- ymax=10.0
+ xmax=5.0
+ ymax=5.0
 
  initial_timestep=0.04
  timestep_rise=1.5
