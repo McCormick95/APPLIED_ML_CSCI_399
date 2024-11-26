@@ -2,7 +2,9 @@ import subprocess
 import matplotlib.pyplot as plt
 
 # List of cell sizes to test
-cells_array = [64, 128, 192, 256, 320, 512]
+# cells_array = [64, 128, 192, 256, 320, 384, 448, 512]
+
+cells_array = [x for x in range(64, 576, 64)]
 
 # Lists to store simulation data
 cells = []
