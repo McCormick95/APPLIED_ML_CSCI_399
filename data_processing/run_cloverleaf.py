@@ -8,9 +8,7 @@ import shutil
 import tarfile
 from datetime import datetime
 from typing import Dict, Any, Optional
-from clover_vis import CloverVisualizer
-from datetime import datetime
-import os
+import json
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -43,23 +41,59 @@ class CloverLeafRunner:
         logger.info(f"Base directory: {self.base_dir}")
         logger.info(f"CloverLeaf directory: {self.clover_dir}")
         logger.info(f"Output directory: {self.output_dir}")
+
+    def _filter_input_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter parameters to only include those used in generate_input."""
+        input_params = {
+            'cells', 'steps', 'visit_freq',
+            'state1_density', 'state1_energy',
+            'state2_density', 'state2_energy',
+            'state2_xmin', 'state2_xmax',
+            'state2_ymin', 'state2_ymax',
+            'xmin', 'xmax', 'ymin', 'ymax',
+            'initial_timestep', 'timestep_rise', 'max_timestep'
+        }
+        return {k: v for k, v in params.items() if k in input_params}
         
-    def generate_input(self, cells: int = 64, steps: int = 500, visit_freq: int = 2) -> None:
+    def generate_input(self, 
+                  cells: int = 64,
+                  steps: int = 500, 
+                  visit_freq: int = 1,
+                  # State parameters
+                  state1_density: float = 0.2,
+                  state1_energy: float = 1.0,
+                  state2_density: float = 1.0,
+                  state2_energy: float = 2.5,
+                  # State 2 geometry
+                  state2_xmin: float = 0.0,
+                  state2_xmax: float = 1.0,
+                  state2_ymin: float = 0.0,
+                  state2_ymax: float = 1.0,
+                  # Overall geometry
+                  xmin: float = 0.0,
+                  xmax: float = 5.0,
+                  ymin: float = 0.0,
+                  ymax: float = 5.0,
+                  # Timestep parameters
+                  initial_timestep: float = 0.04,
+                  timestep_rise: float = 1.5,
+                  max_timestep: float = 0.04
+                  ) -> None:
         input_content = f"""*clover
- state 1 density=0.2 energy=1.0
- state 2 density=1.0 energy=2.5 geometry=rectangle xmin=0.0 xmax=1.0 ymin=0.0 ymax=1.0
+ state 1 density={state1_density} energy={state1_energy}
+ state 2 density={state2_density} energy={state2_energy} geometry=rectangle xmin={state2_xmin} xmax={state2_xmax} ymin={state2_ymin} ymax={state2_ymax}
 
  x_cells={cells}
  y_cells={cells}
 
- xmin=0.0
- ymin=0.0
- xmax=5.0
- ymax=5.0
+ xmin={xmin}
+ ymin={ymin}
+ xmax={xmax}
+ ymax={ymax}
 
- initial_timestep=0.04
- timestep_rise=1.5
- max_timestep=0.04
+ initial_timestep={initial_timestep}
+ timestep_rise={timestep_rise}
+ max_timestep={max_timestep}
  end_step={steps}
  test_problem 2
  
@@ -111,77 +145,82 @@ class CloverLeafRunner:
                 
         return time.time() - start_time
 
-    def create_archive(self, iteration: int) -> None:
+    def create_archive(self, param_str: str, iteration: int) -> None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        archive_name = f"clover_data_{timestamp}_{iteration:02d}.tar.gz"
+        archive_name = f"clover_data_{param_str}_{timestamp}_{iteration:02d}.tar.gz"
         
         with tarfile.open(self.output_dir / archive_name, "w:gz") as tar:
-            tar.add(self.output_dir / f"iteration_{iteration}", 
-                   arcname=f"iteration_{iteration}")
+            tar.add(self.output_dir / f"iteration_{param_str}_{iteration}", 
+                arcname=f"iteration_{param_str}_{iteration}")
         logger.info(f"Created archive: {archive_name}")
 
+    def cleanup(self) -> None:
+        """Clean the CloverLeaf directory after running simulations."""
+        logger.info("Cleaning CloverLeaf directory...")
+        try:
+            subprocess.run(["make", "clean"], cwd=self.clover_dir, check=True)
+            logger.info("Successfully cleaned CloverLeaf directory")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to clean CloverLeaf directory: {e}")
+
     def run_workflow(self, cells: int = 64, steps: int = 500, visit_freq: int = 1, 
-                 visualize: bool = False, iteration: int = 2):
-        print(f"Starting CloverLeaf workflow (iteration {iteration})...")
+                visualize: bool = False, iteration: int = 1, **params):
         total_start = time.time()
-        timing_data = {}
-
+        
+        # Filter parameters for generate_input
+        input_params = self._filter_input_params(params)
+        
+        # Create parameter string for file naming
+        param_str = f"c{cells}_s{steps}_d1{params.get('state1_density', 0.2):.1f}_" \
+                    f"d2{params.get('state2_density', 1.0):.1f}_e1{params.get('state1_energy', 1.0):.1f}_" \
+                    f"e2{params.get('state2_energy', 2.5):.1f}"
+        
+        # Setup directories
+        iter_dir = self.output_dir / f"iteration_{param_str}_{iteration}"
+        iter_dir.mkdir(parents=True, exist_ok=True)
+        
         # Generate input and run simulation
-        self.generate_input(cells, steps, visit_freq)
-        print("Generated CloverLeaf input.")
-        timing_data['simulation'] = self.run_simulation()
-        print(f"Simulation completed in {timing_data['simulation']:.2f} seconds.")
-
-        # Process VTK files
-        timing_data['vtk_processing'] = self.process_files(iteration)
-        print(f"VTK files processed in {timing_data['vtk_processing']:.2f} seconds.")
-
-        # Process VTK files into .npy files
-        visualizer = CloverVisualizer(self.output_dir / f"iteration_{iteration}", self.vis_dir)
-        npy_start = time.time()
-        visualizer.process_all_files()
-        timing_data['npy_generation'] = time.time() - npy_start
-        print(f".npy files generated in {timing_data['npy_generation']:.2f} seconds.")
-
-        # Create timestamp for unique filenames
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Zip the .npy files and then delete them
-        npy_dir = visualizer.npy_dir
-        npy_archive_name = self.output_dir / f"npy_files_{timestamp}_iteration_{iteration}.zip"
-        shutil.make_archive(npy_archive_name.with_suffix(''), 'zip', root_dir=npy_dir)
-        print(f"Archived .npy files into: {npy_archive_name}")
-        for npy_file in npy_dir.glob("*.npy"):
-            npy_file.unlink()
-        print("Deleted all .npy files after archiving.")
-
-        # Zip the .vtk files and clover.out and leave clover.out untouched
-        vtk_dir = self.output_dir / f"iteration_{iteration}"
-        vtk_archive_name = self.output_dir / f"vtk_files_{timestamp}_iteration_{iteration}.zip"
+        logger.info(f"Starting simulation with parameters: {param_str}")
+        logger.info(f"Output directory: {iter_dir}")
         
-        # Add clover.out file to the vtk directory for zipping (without removing it)
-        clover_out_file = self.output_dir / "CloverLeaf_Serial" / "clover.out"
-        if clover_out_file.exists():
-            shutil.copy(clover_out_file, vtk_dir)  # Copy the clover.out to the vtk directory
+        sim_start = time.time()
+        self.generate_input(cells, steps, visit_freq, **input_params)
+        sim_time = self.run_simulation()
+        sim_end = time.time()
+        self.timing_data['simulation'] = sim_end - sim_start
         
-        shutil.make_archive(vtk_archive_name.with_suffix(''), 'zip', root_dir=vtk_dir)
-        print(f"Archived .vtk files and clover.out into: {vtk_archive_name}")
+        # Process files
+        process_start = time.time()
+        self.process_files(iteration)
+        process_end = time.time()
+        self.timing_data['processing'] = process_end - process_start
         
-        # Do not delete .vtk files until after visualization is done
-        if visualize:
-            timing_data['visualization'] = visualizer.create_animation(variable='velocity_magnitude')
-            print(f"Visualization completed in {timing_data['visualization']:.2f} seconds.")
-
-        # Clean up by deleting .vtk files (but keep clover.out)
-        for vtk_file in vtk_dir.glob("*.vtk"):
-            vtk_file.unlink()
-        print("Deleted all .vtk files after archiving.")
-
-        timing_data['total'] = time.time() - total_start
-        return timing_data
+        # Create archive with parameter string
+        self.create_archive(param_str, iteration)
+        
+        self.timing_data['total'] = time.time() - total_start
+        
+        # Save run configuration and timing data
+        config_data = {
+            'parameters': {
+                'cells': cells,
+                'steps': steps,
+                'visit_freq': visit_freq,
+                **params
+            },
+            'timing': self.timing_data,
+            'timestamp': datetime.now().isoformat(),
+            'output_dir': str(iter_dir)
+        }
+        
+        with open(iter_dir / 'run_config.json', 'w') as f:
+            json.dump(config_data, f, indent=4)
+        
+        return self.timing_data
 
 def main():
     parser = argparse.ArgumentParser(description='CloverLeaf Workflow Runner')
+    # Core arguments
     parser.add_argument('--cells', type=int, default=64,
                        help='Number of cells in x and y (default: 64)')
     parser.add_argument('--steps', type=int, default=500,
@@ -189,22 +228,29 @@ def main():
     parser.add_argument('--visit-freq', type=int, default=1,
                        help='Frequency of VTK file generation (default: 1)')
     parser.add_argument('--visualize', action='store_true',
-                       help='Generate visualizations (optional)')
+                       help='Generate visualizations')
     parser.add_argument('--base-dir', type=str, default=None,
                        help='Base directory for CloverLeaf project')
+    parser.add_argument('--cleanup', action='store_true', default=False,
+                       help='Clean the CloverLeaf directory after running')
+
     args = parser.parse_args()
-
+    
     runner = CloverLeafRunner(args.base_dir)
-    timing_data = runner.run_workflow(args.cells, args.steps, args.visit_freq, args.visualize)
+    
+    # Convert args to dict for additional parameters
+    params = vars(args)
+    
+    # Store cleanup value before removing from params
+    should_cleanup = params.pop('cleanup', False)
+    
+    # Remove non-workflow parameters
+    params.pop('base_dir', None)
+    
+    timing_data = runner.run_workflow(**params)
 
-    print("\nTiming Summary:")
-    print(f"Simulation Time: {timing_data['simulation']:.2f} seconds")
-    print(f"VTK Processing Time: {timing_data['vtk_processing']:.2f} seconds")
-    print(f"NPY Generation Time: {timing_data['npy_generation']:.2f} seconds")
-    if args.visualize:
-        print(f"Visualization Time: {timing_data['visualization']:.2f} seconds")
-    print(f"Total Time: {timing_data['total']:.2f} seconds")
-
+    if should_cleanup:
+        runner.cleanup()
 
 if __name__ == "__main__":
     main()
